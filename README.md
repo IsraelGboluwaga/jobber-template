@@ -3,65 +3,69 @@
 If this saves you time, consider leaving a star on the repo — it helps other
 job-seekers find it.
 
-A lightweight **scheduled pipeline** (no web app, no server, no UI) that runs once
-each morning on GitHub Actions and:
+A small **scheduled pipeline** — no server, no web app, no UI. Once a day,
+GitHub Actions runs it and it:
 
-1. Finds ~10 postings matching your criteria across the consumer job boards
-   (LinkedIn / Indeed / Glassdoor / Google, via JobSpy).
-2. Deduplicates, drops roles that don't match your location/sponsorship rules, and ranks the rest.
-3. Tailors your CV to each new posting via an LLM — **3 providers built in**
-   (DeepSeek, OpenAI, Anthropic), plus any other OpenAI-compatible endpoint.
-4. Drafts answers to each posting's application questions, if any.
-5. Writes one row per job into a Notion database, with the tailored CV on its own
-   linked page and any drafted answers in the row's page body.
-6. Sends a single ntfy.sh push when the run finishes.
+1. **Searches** LinkedIn, Indeed, Glassdoor, and Google Jobs (via
+   JobSpy) for your target titles and
+   locations.
+2. **Filters and ranks** the results: drops duplicates, roles you've already
+   seen, and roles you can't realistically get (location, sponsorship,
+   salary), then keeps the best ~10.
+3. **Tailors your CV** to each kept posting with an LLM — DeepSeek, OpenAI,
+   and Anthropic work out of the box, and any other OpenAI-compatible
+   endpoint works with one config line.
+4. **Drafts answers** to the posting's application questions, if it has any.
+5. **Writes one row per job** to a Notion database, with the tailored CV on a
+   linked page and any drafted answers in the row's body.
+6. **Sends one push notification** via [ntfy](https://ntfy.sh) when it's done
+   (or if it fails).
 
-You review and apply manually. **The pipeline never auto-applies.** Disabling the
-GitHub Actions workflow stops the entire system.
+You review in Notion and apply yourself. Three guarantees:
+
+- **It never applies for you.** It only writes to Notion — no form
+  submission, no logging into job boards.
+- **It never invents experience.** The LLM may reorder, reweight, and
+  rephrase what's in your master CV, but is instructed never to add
+  employers, titles, dates, metrics, or skills you don't have.
+- **Your CV and keys are never committed.** They live in `.env` locally and
+  in GitHub Actions secrets in CI.
+
+To stop everything, disable the `daily-job-search` workflow.
 
 ---
 
-## Using this template
+## Quick start
 
 This is a [template repository](../../generate) — click **Use this template**
-above (or fork it) to get your own copy, then:
+(or fork it) to get your own copy. Then:
 
-1. **Clone your copy** and install deps:
-   ```bash
-   uv sync
-   ```
-2. **Personalize `preferences.yaml`** — your job titles, locations, geo
-   eligibility rules, and salary band. Fastest way:
+1. **Install** — `uv sync` ([details](#0-python-uv)).
+2. **Personalize `preferences.yaml`** — your titles, locations, geo rules, and
+   salary band:
    ```bash
    uv run python scripts/setup.py
    ```
-   Answers a handful of questions and writes the file for you. (Using Claude
-   Code? Run `/setup` instead and it'll interview you conversationally.) You
-   can also hand-edit `preferences.yaml` directly — see the
-   [Configuration](#configuration-preferencesyaml--configyaml) section below
-   for what every field does.
-3. **Set up secrets**: `cp .env.example .env` and fill it in locally; add the
-   required ones as GitHub Actions repo secrets before you rely on the
-   scheduled run — see [Environment variables](#environment-variables) for
-   the full list of what's required vs. optional, and
-   [step 5](#5-github-actions-secrets) for how to add them on GitHub.
-4. **Create the Notion database** and **import your CV** — one-time setup,
-   covered in detail in [Setup](#setup) below.
-5. **Try it safely first**:
+   It asks a handful of questions and writes the file. In Claude Code, run
+   `/setup` instead for a conversational version. Or hand-edit the file —
+   see [Configuration](#configuration).
+3. **Create the Notion database** and integration ([step 1](#1-notion-database--integration)).
+4. **Get an LLM API key** ([step 2](#2-llm-provider-key)).
+5. **Fill in `.env`** — `cp .env.example .env`, then add your keys
+   ([reference](#environment-variables)).
+6. **Import your CV** into `data/master_cv.json` ([step 3](#3-master-cv)).
+7. **Pick an ntfy topic** ([step 4](#4-ntfy-topic)).
+8. **Try it safely** — writes nothing, sends nothing, just prints the plan:
    ```bash
    uv run python -m src.main --dry-run
    ```
-   This writes nothing and sends nothing — it just prints what the pipeline
-   would do with your current `preferences.yaml`.
-6. Once you're happy, push to GitHub and either wait for the daily schedule or
-   trigger the `daily-job-search` workflow manually from the Actions tab.
-
-The rest of this README covers each of those steps in depth, plus the
-pipeline's internals if you want to modify the logic.
+9. **Add your GitHub Actions secrets** ([step 5](#5-github-actions-secrets)),
+   push, and either wait for the daily schedule or run the `daily-job-search`
+   workflow manually from the Actions tab.
 
 ---
 
-## How it fits together
+## How it works
 
 ```
 acquire → max-age filter → classify → dedup (ids + collapse) → drop already-seen
@@ -70,13 +74,21 @@ acquire → max-age filter → classify → dedup (ids + collapse) → drop alre
   → rollover → ntfy
 ```
 
-- **`data/master_cv.json`** is the single source of truth and the one input you
-  cannot regenerate. The daily run reads only this file and never fetches your CV
-  over the network during the daily run. `scripts/import_cv.py` builds it from a
-  Notion page (one-time).
-- The **viability filter runs before any LLM call**, so dead-end roles cost no
-  tokens.
-- Only **new** rows are ever tailored; existing rows are never re-tailored.
+- **Everything before "tailor" is deterministic** — plain rules, no LLM. Roles
+  that fail your viability rules are dropped before any LLM call, so they cost
+  no tokens.
+- **Only new postings are tailored.** Anything already in your Notion
+  database (in any status) is skipped, so rows are never re-tailored.
+- **`data/master_cv.json` is the one input you can't regenerate from the
+  repo.** The daily run reads your CV from this local file only — it never
+  fetches it over the network. `scripts/import_cv.py` builds it once from a
+  Notion page.
+- **Match %** is the share of the job description's skill terms that appear
+  in your CV — deterministic, no LLM — `Master match %` for your master CV (used for ranking),
+  `Tailored match %` for the tailored one.
+- **Rollover:** `New` rows older than 14 days (configurable) are moved to
+  `Archived` so your working view stays short. `Applying` rows are never
+  touched.
 
 ---
 
@@ -84,21 +96,20 @@ acquire → max-age filter → classify → dedup (ids + collapse) → drop alre
 
 ### 0. Python (uv)
 
-This project uses [uv](https://docs.astral.sh/uv/). Dependencies live in
-`pyproject.toml` and are pinned in `uv.lock` (both committed).
+This project uses [uv](https://docs.astral.sh/uv/). Dependencies are declared
+in `pyproject.toml` and pinned in `uv.lock`.
 
 ```bash
 uv sync                   # creates .venv and installs the locked deps
-cp .env.example .env      # fill in real values for local runs
+cp .env.example .env      # then fill in real values for local runs
 ```
 
-Run anything with `uv run …` (it uses the project venv automatically). You don't
-activate a venv or `pip install` manually.
+Run everything with `uv run …` — no need to activate a venv or `pip install`.
 
 ### 1. Notion database + integration
 
-1. Create a new **database** (full-page) in Notion with **exactly these
-   properties** (name and type must match):
+1. Create a new full-page **database** in Notion with **exactly these
+   properties** (names and types must match):
 
    | Property | Type |
    |---|---|
@@ -112,9 +123,9 @@ activate a venv or `pip install` manually.
    | Relocation support | Select |
    | Viability | Select |
    | Fit note | Text |
-   | Status | Select (New / Applying / Applied / Uninterested / Archived) |
+   | Status | Select |
    | Tailored CV | URL |
-   | Has questions | Select (yes / no) |
+   | Has questions | Select |
    | Job ID | Text |
    | Source | Select |
    | Posted date | Date |
@@ -122,260 +133,321 @@ activate a venv or `pip install` manually.
    | Seniority | Select |
    | Salary | Text |
 
-   Select options are created automatically the first time a value appears, so
-   you don't have to pre-fill them (except that you may want to add `Applied` and
-   `Uninterested` yourself for manual use).
+   You don't need to pre-create select options — Notion adds them the first
+   time the pipeline writes a value. The pipeline itself only uses the
+   `Status` values `New` and `Archived`; add `Applying`, `Applied`, and
+   `Uninterested` yourself to track your progress.
 
 2. Create an **internal integration** at
-   <https://www.notion.so/my-integrations>, copy its token (`NOTION_TOKEN`).
-3. **Scope the token to this one database only:** open the database → `•••` →
-   *Connections* → add your integration. Do **not** share your whole workspace
-   with it.
-4. Copy the database id from its URL (the 32-char id before `?v=`) into
-   `NOTION_DATABASE_ID`.
-5. Keep your default view filtered to `Status is New or Applying` — Applied,
-   Uninterested, and Archived rows stay on record but drop out of sight.
+   <https://www.notion.so/my-integrations> and copy its token — this is
+   `NOTION_TOKEN`.
+3. **Give the integration access to this database only:** open the database →
+   `•••` → *Connections* → add your integration. Don't share your whole
+   workspace with it.
+4. Copy the database id from its URL (the 32-character id before `?v=`) —
+   this is `NOTION_DATABASE_ID`.
+5. *(Recommended)* Filter your default view to `Status is New or Applying`, so
+   Applied, Uninterested, and Archived rows stay on record but out of sight.
 
-**Exporting a tailored CV:** each job's tailored CV lives on its own child page,
-linked from the row's `Tailored CV` column. Open it → `•••` → *Export* → PDF /
-HTML / Markdown. Single-page export works on the Notion free plan.
+The `Job title` cell links to the posting. Each job's tailored CV is on its
+own page, linked from the `Tailored CV` column. To get a PDF, open that page →
+`•••` → *Export* → PDF (works on Notion's free plan).
 
 ### 2. LLM provider key
 
-The tailoring/answer-drafting calls go through a plain OpenAI-compatible
-client, so any provider that speaks that API works — DeepSeek, OpenAI,
-Anthropic's OpenAI-compatible endpoint, Groq, a local vLLM/Ollama server, and
-so on. Swapping providers never needs a code change.
+LLM calls go through a standard OpenAI-compatible client, so switching
+providers never needs a code change. The API key always goes in
+**`LLM_API_KEY`**, whichever provider you use.
 
-The template defaults to **DeepSeek** (cheap, and its `thinking` toggle is
-wired in explicitly): create a key at <https://platform.deepseek.com> and set
-`LLM_API_KEY`. Whichever provider you pick, the env var name is always
-`LLM_API_KEY`.
+The default provider is **DeepSeek** (inexpensive; its "thinking" mode is
+switched off to keep calls cheap). Create a key at
+<https://platform.deepseek.com> and you're done.
 
-**Picking a provider/model** — three ways, in priority order:
+**To use a different provider or model**, the settings are resolved in this
+order (first match wins):
 
-1. `LLM_PROVIDER` / `LLM_MODEL` env vars (`.env` locally, or a GitHub Actions
-   repo **Variable** — not Secret, these aren't sensitive — so a fork can
-   switch provider from the GitHub UI with no commit).
-2. `config.yaml`'s `llm.provider` / `llm.model`.
-3. A built-in default for known providers (`deepseek`, `openai`,
-   `anthropic`) — see `PROVIDER_DEFAULTS` in `src/llm.py` for the current
-   values. A provider not in that list (Groq, a local server, ...) needs
-   `config.yaml`'s `llm.base_url` set explicitly (no env override for
-   `base_url`).
+1. The `LLM_PROVIDER` / `LLM_MODEL` environment variables — in `.env`
+   locally, or as GitHub Actions repo **Variables** (not Secrets; they aren't
+   sensitive). This is the easiest way — no file edits, no commits.
+2. `llm.provider` / `llm.model` in `config.yaml`.
+3. A built-in default model for `deepseek`, `openai`, and `anthropic` — see
+   `PROVIDER_DEFAULTS` in `src/llm.py` for the current values.
 
-So the fastest way to try Anthropic instead, with no file edits: set
-`LLM_PROVIDER=anthropic` (and optionally `LLM_MODEL`) in `.env`. Anthropic's
-OpenAI-compatible endpoint is explicitly "test and comparison" per their own
-docs, not their recommended production path, and doesn't support prompt
-caching (the native Anthropic SDK does) — it works fine here, just worth
-knowing before relying on it for the unattended daily run.
+For example, to try Anthropic, set `LLM_PROVIDER=anthropic` and put your
+Anthropic key in `LLM_API_KEY`.
 
-### 3. Master CV (one-time)
+Two things to know:
 
-Your resume lives as a normal Notion page — headings for sections, bullet lists
-for highlights, whatever structure you already use. An LLM pass does the
-structuring, not a rigid parser, so formatting doesn't need to be exact. The
-runtime itself stays offline and deterministic: it only ever reads the
-resulting `data/master_cv.json`, never Notion, during a daily run.
+- **Other providers** (Groq, a local vLLM/Ollama server, …) have no built-in
+  default, so set `llm.base_url` (and `llm.model`) in `config.yaml`.
+  `base_url` can't be set from an environment variable.
+- **`config.yaml`'s `llm.model` / `llm.base_url` only apply to the provider
+  `config.yaml` names** (DeepSeek if it names none). If `LLM_PROVIDER` picks a
+  different provider, those values are ignored, so a DeepSeek model name is
+  never sent to Anthropic.
+
+> Anthropic describes its OpenAI-compatible endpoint as intended for testing
+> and comparison rather than production, and it doesn't support prompt
+> caching. It works fine here — just worth knowing before you rely on it for
+> the unattended daily run.
+
+### 3. Master CV
+
+Your resume lives in an ordinary Notion page — headings, bullets, whatever
+structure you already use. A one-time LLM pass turns it into structured JSON,
+so the formatting doesn't need to be exact.
 
 1. Write or paste your resume into a Notion page.
-2. Share that page with the **same integration** from step 1: page → `•••` →
-   *Connections* → add your integration. (It's the only extra grant beyond the
-   jobs database — the integration still touches nothing else in your workspace.)
-3. Copy the page id from its URL (the 32-char id, e.g.
-   `https://notion.so/Your-Resume-<PAGE_ID>`).
-4. Run:
+2. Share it with the **same integration** from step 1: page → `•••` →
+   *Connections* → add your integration. This page and the jobs database are
+   the only things the integration can see.
+3. Copy the page id from its URL (the 32-character id at the end of
+   `https://notion.so/Your-Resume-<PAGE_ID>`) into `CV_NOTION_PAGE_ID` in
+   `.env`. `NOTION_TOKEN` and `LLM_API_KEY` must be set there too.
+4. Run the import:
    ```bash
-   export CV_NOTION_PAGE_ID=<PAGE_ID>
-   export NOTION_TOKEN=ntn_...
-   export LLM_API_KEY=sk-...
-   uv run python scripts/import_cv.py     # prints the JSON for review
+   uv run python scripts/import_cv.py       # or: --page-id <PAGE_ID>
    ```
-5. Review the printed JSON, then **commit `data/master_cv.json` by hand.**
+   This writes `data/master_cv.json` and prints it — **read it through** to
+   check nothing was lost or garbled.
+5. Upload it as the `MASTER_CV_JSON` secret so GitHub Actions can use it
+   (using the [GitHub CLI](https://cli.github.com/)):
+   ```bash
+   gh secret set MASTER_CV_JSON < data/master_cv.json
+   ```
+   Or paste the file's contents into a new repo secret named
+   `MASTER_CV_JSON` in the GitHub UI.
 
-Re-run this whenever you update your resume. (`data/master_cv.example.json` shows
-the schema if you'd rather write it directly.)
+`data/master_cv.json` is gitignored — **don't commit it**. It's your real
+resume, and forks of a public repo are public. Repeat steps 4–5 whenever you
+update your resume. If you'd rather write the JSON by hand,
+`data/master_cv.example.json` shows the schema.
 
 ### 4. ntfy topic
 
-Pick a topic name only you're likely to guess (set in `config.yaml →
-notify.ntfy_topic`, or override with the `NTFY_TOPIC` env/secret) and
-subscribe to `https://ntfy.sh/<your-topic>` in the ntfy app or web. You'll get
-one push per run (and a high-priority push if a run fails). ntfy topics are a
-public global namespace, not an account you own — treat the topic name as a
-notification channel, not a secret.
+[ntfy](https://ntfy.sh) topics are a public, shared namespace — anyone who
+knows a topic name can read it. So:
+
+1. Pick an obscure topic name (e.g. `jobber-<random-string>`) and treat it as
+   a notification channel, not a secret.
+2. Set it as `notify.ntfy_topic` in `config.yaml`, or as `NTFY_TOPIC` in
+   `.env` / GitHub Actions secrets. **Change the committed placeholder** —
+   everyone who forgets shares it.
+3. Subscribe to it in the ntfy app, or at `https://ntfy.sh/<your-topic>`.
+
+You'll get one push per run, and a high-priority push if a run fails.
+Dry runs never notify.
 
 ### 5. GitHub Actions secrets
 
-In the repo: *Settings → Secrets and variables → Actions*:
+In your repo, go to *Settings → Secrets and variables → Actions*.
 
-- Add `LLM_API_KEY`, `NOTION_TOKEN`, and `NOTION_DATABASE_ID` as **Secrets**
-  (required), plus `NTFY_TOPIC` too if you're overriding `config.yaml`'s default.
-- Optionally add `LLM_PROVIDER` / `LLM_MODEL` as **Variables** (a separate tab
-  from Secrets — these aren't sensitive) to switch LLM provider without
-  editing `config.yaml` or making a commit.
+**Secrets** tab:
 
-See [Environment variables](#environment-variables) below for the full list.
+- `LLM_API_KEY`, `NOTION_TOKEN`, `NOTION_DATABASE_ID` — required.
+- `MASTER_CV_JSON` — required; the contents of `data/master_cv.json`
+  ([step 3](#3-master-cv)).
+- `NTFY_TOPIC` — only if you didn't set your topic in `config.yaml`.
 
-Nothing secret is ever committed. `.env` is gitignored. The workflow injects these
-as env vars. Leave GitHub's built-in failure email on — it's the backstop under
-ntfy.
+**Variables** tab (optional):
+
+- `LLM_PROVIDER` / `LLM_MODEL` — to switch LLM provider or model without a
+  commit.
+
+The workflow passes these to the run as environment variables. Also leave
+GitHub's built-in "workflow failed" email turned on as a backup for ntfy.
 
 ---
 
 ## Environment variables
 
-Everything below lives in `.env` for local runs (`cp .env.example .env`); in
-GitHub Actions, the required ones are repo **Secrets** and the LLM
-provider/model overrides are repo **Variables** — see
-[step 5](#5-github-actions-secrets) above.
+For local runs, all of these go in `.env` (`cp .env.example .env`). For GitHub
+Actions, see [step 5](#5-github-actions-secrets).
 
-| Variable | Required? | GitHub Actions | Purpose |
+| Variable | Required? | In GitHub Actions | Purpose |
 |---|---|---|---|
-| `LLM_API_KEY` | Required | Secret | API key for whichever LLM provider is resolved — see [LLM provider key](#2-llm-provider-key). |
-| `LLM_PROVIDER` | Optional | Variable | Override the LLM provider (default: `deepseek`). |
-| `LLM_MODEL` | Optional | Variable | Override the model (default: the resolved provider's built-in default). |
-| `NOTION_TOKEN` | Required | Secret | Notion internal integration token, scoped to the jobs database only. |
-| `NOTION_DATABASE_ID` | Required | Secret | The jobs database's id (from its URL). |
-| `NTFY_TOPIC` | Optional | Secret | Override `config.yaml`'s `notify.ntfy_topic`. |
-| `CV_NOTION_PAGE_ID` | Required, but only for `scripts/import_cv.py` | Not needed in Actions | Notion page id holding your resume — the daily run never uses it, only the one-time CV import. |
-
-Nothing secret is ever committed — `.env` is gitignored.
+| `LLM_API_KEY` | Yes | Secret | API key for your LLM provider — see [step 2](#2-llm-provider-key). |
+| `LLM_PROVIDER` | No | Variable | LLM provider (default: `deepseek`). |
+| `LLM_MODEL` | No | Variable | Model (default: the provider's built-in default). |
+| `NOTION_TOKEN` | Yes | Secret | Notion integration token, with access to the jobs database only. |
+| `NOTION_DATABASE_ID` | Yes | Secret | The jobs database's id, from its URL. |
+| `NTFY_TOPIC` | No | Secret | Overrides `config.yaml`'s `notify.ntfy_topic`. |
+| `CV_NOTION_PAGE_ID` | Only for `scripts/import_cv.py` | Not needed | Id of the Notion page holding your resume. |
+| `MASTER_CV_JSON` | Yes, in Actions | Secret | Contents of `data/master_cv.json`. Not used locally — the local file is read directly. |
 
 ---
 
 ## Running
 
-- **Locally, safe (writes nothing, sends nothing):**
-  ```bash
-  uv run python -m src.main --dry-run
-  ```
-  Prints the full plan: every kept role with its viability label, and **every
-  dropped role with the reason**. Tailoring runs if `LLM_API_KEY` is present;
-  otherwise it's skipped with a warning.
+**Dry run** — writes nothing to Notion, sends no notification:
 
-- **Locally, for real:**
-  ```bash
-  uv run python -m src.main
-  ```
+```bash
+uv run python -m src.main --dry-run
+```
 
-- **In CI:** runs daily at 04:00 UTC by default — edit the cron expression in
-  `.github/workflows/daily.yml` to suit your timezone. Trigger manually from
-  the Actions tab (`workflow_dispatch`).
+Prints the full plan: every kept role with its viability label, and **every
+dropped role with the reason it was dropped**. If `LLM_API_KEY` is set, it
+also runs the tailoring (and spends tokens) so you can see the output;
+otherwise tailoring is skipped with a warning. If Notion credentials are set,
+it reads the database to skip roles you've already seen.
+
+**Real run, locally:**
+
+```bash
+uv run python -m src.main
+```
+
+**On GitHub Actions:** `.github/workflows/daily.yml` runs daily at 04:00 UTC —
+edit its `cron` line to suit your timezone. To run it on demand, open the
+Actions tab → `daily-job-search` → *Run workflow*.
+
+Both commands accept `--preferences <path>` and `--config <path>` to use
+files other than the defaults.
+
+---
+
+## Configuration
+
+There are two committed YAML files. Neither holds secrets.
+
+- **`preferences.yaml`** — *your* job-search criteria. This is the file you
+  personalize (via `scripts/setup.py`, `/setup`, or by hand). The values
+  committed in the template are a worked example, not a real candidate's.
+- **`config.yaml`** — pipeline and ops settings. Most people never need to
+  change it apart from the ntfy topic.
+
+If both files set the same top-level key, `config.yaml` wins.
+
+### `preferences.yaml`
+
+- **`candidate.home_base` / `home_base_code`** — where you live. Only appears
+  in the text of drop reasons (e.g. "won't hire/sponsor from XX"); it doesn't
+  affect any decision.
+- **`search.*`**
+  - `titles`, `locations` — what JobSpy searches for. Every location is
+    searched for every title.
+  - `count` — how many roles to tailor and write per run (default 10).
+    `hard_max` — an absolute cap enforced in code (default 15).
+  - `seniority`, `max_age_days` (skip older postings), `boards` (which job
+    boards to query), `country_indeed` (which regional Indeed/Glassdoor site
+    to use for non-remote searches).
+- **`geo.*`** — the inputs to the [viability rules](#viability-rules):
+  - `exclude_countries` — always dropped.
+  - `welcome_regions` — regions you're happy to work in (e.g. `UK`, `EU`).
+  - `onsite_dead_regions` — regions where onsite/hybrid roles are dropped
+    (e.g. because they won't sponsor you).
+  - `remote_home_signals` — words that make a remote role count as open to
+    you (e.g. `worldwide`, or your country or continent).
+  - `unlisted_region` — what to do with a region in none of the lists:
+    `low` (keep, rank last) or `drop`.
+  - `hard_sponsorship_filter` — if `true`, drop any role that explicitly says
+    it won't sponsor visas.
+  - `country_hints` — maps location text (e.g. `berlin`) to a country and
+    region. Add entries for your home and for anywhere you search that isn't
+    already covered.
+- **`salary.*`** — your band in USD (`min_usd`, `max_usd`), plus an `fx` table
+  of conversion rates to USD. **Update `fx` yourself** — it's never fetched.
+
+> **Keep `search.locations` and `geo.welcome_regions` in sync.**
+> `search.locations` are the literal strings sent to the job boards;
+> `welcome_regions` are the buckets used to judge results. A welcome region
+> with no matching search location is never searched — e.g. to welcome
+> `Middle East`, add `United Arab Emirates` (or similar) to `search.locations`.
+
+### `config.yaml`
+
+- **`source.prefer_direct`** — rank postings whose apply link goes to a
+  company's own applicant-tracking system (Greenhouse, Lever, Ashby, Workday)
+  above plain job-board listings.
+- **`llm.*`** — `provider` / `model` / `base_url` (see
+  [step 2](#2-llm-provider-key) for how they're resolved), `thinking`,
+  per-call token caps (`max_tokens_cv`, `max_tokens_answers`), and the budget
+  guard (`rough_tokens_per_job`, `budget_ceiling_tokens`).
+- **`rollover.archive_new_after_days`** — how long a `New` row stays before
+  it's moved to `Archived` (default 14). `Applying` rows are never touched.
+- **`notify.ntfy_topic`** — your ntfy topic ([step 4](#4-ntfy-topic)).
+
+---
+
+## Viability rules
+
+This is the "don't waste my time" filter. It runs before any LLM call, uses
+fixed rules (never the LLM), and every decision comes with a human-readable
+reason — run `--dry-run` to see them. All the lists below come from
+`preferences.yaml`.
+
+**Dropped:**
+
+- the country is in `exclude_countries`;
+- an onsite or hybrid role in an `onsite_dead_regions` region;
+- a remote role restricted to a country or region you can't work from;
+- a salary is listed and falls outside your USD band (no salary listed is
+  *not* dropped);
+- the role says it won't sponsor, and `hard_sponsorship_filter` is on;
+- the region is in none of your lists, and `unlisted_region: drop`.
+
+**Everything else gets a label:**
+
+| Label | When |
+|---|---|
+| `high` | A remote role open to you — worldwide or EMEA scope, or matching `remote_home_signals`. Or a welcome region that says it sponsors. |
+| `medium` | A welcome region that doesn't mention sponsorship. |
+| `low` | A welcome region that says it won't sponsor; a worldwide-remote role based in an `onsite_dead_regions` region; or an unlisted region with `unlisted_region: low`. |
+
+**Ranking:** label (`high` first) → direct company postings before job-board
+listings (if `prefer_direct`) → master match %. The top `search.count` roles
+are tailored and written to Notion.
+
+---
+
+## Cost & safety guards
+
+1. Every LLM call has an explicit `max_tokens` cap.
+2. DeepSeek's thinking mode is turned off (`llm.thinking: false`).
+3. Only new rows are tailored; existing rows are never re-tailored.
+4. The job count is capped at `search.hard_max` before any LLM call.
+5. Failed LLM calls get at most 3 attempts, with capped backoff — and only
+   for rate limits, server errors, and timeouts. Other 4xx errors are never
+   retried.
+6. On GitHub Actions, a new run cancels any still-running one, and every run
+   is killed after 10 minutes.
+7. A pre-flight check aborts the run before any LLM call if
+   `roles × rough_tokens_per_job` exceeds `budget_ceiling_tokens`.
+8. Token usage is printed at the end of every run (visible in the Actions
+   log).
+9. Viability filtering runs before tailoring — a dropped role never reaches
+   the LLM.
 
 ---
 
 ## Development
 
 ```bash
-uv sync --group dev        # installs pytest, ruff, pyright alongside the app deps
-uv run pytest -q           # unit tests — deterministic modules only, no network/LLM calls
+uv sync --group dev        # adds pytest, ruff, and pyright
+uv run pytest -q           # unit tests — no network or LLM calls
 uv run ruff check .
 uv run pyright
 ```
 
-`.github/workflows/ci.yml` runs all three on every push to `main` and every PR
-(separate from `daily.yml`, the scheduled pipeline run — CI needs no secrets).
-Tests live in `tests/`, one file per `src/` module; `tests/conftest.py` has
-`make_cfg`/`make_job` fixtures so a test only states the config/job fields it
-cares about. Things intentionally **not** unit-tested: `acquire_boards` (live
-JobSpy/network), `tailor.py`/`llm.py` (live LLM calls), `notion_store.py`/
-`notify.py` (live Notion/ntfy calls) — exercise those with `--dry-run` or a
-real run instead.
+`.github/workflows/ci.yml` runs all three on every push to `main` and on every
+pull request. It's separate from the scheduled `daily.yml` and needs no
+secrets.
 
----
+Tests live in `tests/`, one file per `src/` module. `tests/conftest.py`
+provides `make_cfg` / `make_job` fixtures, so each test only sets the fields
+it cares about. Code that needs a live service is deliberately **not**
+unit-tested — test it with `--dry-run` or a real run instead:
 
-## Configuration (`preferences.yaml` + `config.yaml`)
-
-Two committed YAML files, both no-secrets. **`preferences.yaml`** is the one file
-you edit when you clone this repo — it holds *your* job-search criteria and
-where you're searching from. **`config.yaml`** holds pipeline/ops settings you
-rarely need to touch.
-
-Generate `preferences.yaml` by answering a few questions instead of hand-editing
-YAML: `uv run python scripts/setup.py`, or the `/setup` command if you're using
-Claude Code.
-
-`preferences.yaml`:
-
-- `candidate.home_base` / `candidate.home_base_code` — free text, used only in
-  human-readable drop-reason strings (e.g. "won't hire/sponsor from <home_base>").
-  Purely cosmetic, doesn't drive any decision.
-- `search.*` — titles, locations, count (10), `hard_max` (15 absolute ceiling),
-  seniority, `max_age_days`, which boards to query.
-- `geo.*` — `exclude_countries` (hard drop), `welcome_regions` (conceptual buckets
-  the viability step labels against), `onsite_dead_regions`,
-  `remote_home_signals` (words that make a remote role eligible from your home
-  base even outside `welcome_regions`), `country_hints` (location text →
-  country/region, used to classify each posting's geo — add an entry for any
-  place you search that isn't already covered), and `unlisted_region`
-  (`low` | `drop`) for regions in none of the lists. **Two layers:**
-  `search.locations` is the concrete strings JobSpy actually queries;
-  `geo.welcome_regions` is the conceptual buckets — keep every welcome region
-  reachable from a `search.locations` entry (e.g. Middle East → United Arab
-  Emirates), or it's never fetched.
-- `salary.*` — USD band and a **manually refreshed** FX map.
-
-`config.yaml`:
-
-- `source.prefer_direct` — rank postings whose apply URL resolves to a company
-  ATS (Greenhouse/Lever/Ashby) above plain board listings.
-- `llm.*` — provider/model/base_url (see [LLM provider key](#2-llm-provider-key)
-  for the full env → config.yaml → built-in-default precedence), token caps,
-  and the budget guard (`rough_tokens_per_job`, `budget_ceiling_tokens`).
-- `rollover.archive_new_after_days` — stale `New` rows move to `Archived` (never
-  `Applying`).
-
-Both accept a path override on the CLI: `--preferences` / `--config`.
-
----
-
-## Viability rules (the "don't waste my time" gate)
-
-Deterministic, reproducible, every decision carries a human-readable reason. The
-model is never the judge here. All thresholds and lists below come from
-`preferences.yaml`; the values checked into this template are a worked
-*example* to illustrate the shape, not a real candidate's rules — run
-`uv run python scripts/setup.py` (or the `/setup` Claude Code command) to
-replace them with yours, or edit `preferences.yaml` by hand.
-
-**Hard drops:** excluded country; onsite/hybrid in an `onsite_dead_regions`
-region; remote roles locked to a place you can't work from; salary present and
-outside the USD band (missing salary does *not* drop).
-
-**Labels on survivors:**
-- `high` — remote role eligible from your home base (`remote_home_signals`), or a
-  welcome region with sponsorship stated `yes`.
-- `medium` — welcome region, sponsorship undefined.
-- `low` — welcome region with sponsorship `no`; an `onsite_dead_regions` remote
-  role with a genuinely global scope; or an unlisted region when
-  `geo.unlisted_region: low`.
-
-Ranking: viability tier → source type (direct above board) → deterministic
-match %. Only the top `search.count` survive to tailoring.
-
----
-
-## Cost & safety guards
-
-1. Explicit `max_tokens` on every LLM call.
-2. Thinking mode off.
-3. LLM only for new rows; existing rows never re-tailored.
-4. Job count clamped to `search.hard_max` before the LLM loop.
-5. Bounded retries (≤3), transient-only, capped backoff, never on 4xx.
-6. Concurrency group + 10-minute job timeout.
-7. Pre-flight budget check aborts the run if `rows × rough_per_job` exceeds the
-   ceiling.
-8. Token usage logged to stdout (visible in the Actions log).
-9. Viability filter runs before tailoring — a dropped role never reaches an LLM
-   call.
+- `acquire_boards` — live JobSpy/network;
+- the LLM calls in `tailor.py` / `llm.py` — `resolve_llm` is the exception,
+  covered by `tests/test_llm.py`;
+- `notion_store.py` / `notify.py` — live Notion/ntfy.
 
 ---
 
 ## Non-goals
 
-No auto-apply, no form submission, no logging into boards. No pre-rendered PDFs
-(the tailored CV is Markdown; render a PDF on demand from the Notion page only for
-jobs you choose to apply to). No database beyond Notion, no frontend, no hosted
-service.
+- No auto-apply, no form submission, no logging into job boards.
+- No pre-rendered PDFs — the tailored CV is Markdown in Notion; export a PDF
+  only for the jobs you actually apply to.
+- No database other than Notion, no frontend, no hosted service.
