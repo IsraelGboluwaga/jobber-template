@@ -142,14 +142,31 @@ HTML / Markdown. Single-page export works on the Notion free plan.
 The tailoring/answer-drafting calls go through a plain OpenAI-compatible
 client, so any provider that speaks that API works — DeepSeek, OpenAI,
 Anthropic's OpenAI-compatible endpoint, Groq, a local vLLM/Ollama server, and
-so on. Swapping providers is a `config.yaml` edit, never a code change; see
-the commented examples in `config.yaml → llm`.
+so on. Swapping providers never needs a code change.
 
 The template defaults to **DeepSeek** (cheap, and its `thinking` toggle is
 wired in explicitly): create a key at <https://platform.deepseek.com> and set
 `LLM_API_KEY`. Whichever provider you pick, the env var name is always
-`LLM_API_KEY` — only `config.yaml`'s `llm.provider` / `llm.model` /
-`llm.base_url` change.
+`LLM_API_KEY`.
+
+**Picking a provider/model** — three ways, in priority order:
+
+1. `LLM_PROVIDER` / `LLM_MODEL` env vars (`.env` locally, or a GitHub Actions
+   repo **Variable** — not Secret, these aren't sensitive — so a fork can
+   switch provider from the GitHub UI with no commit).
+2. `config.yaml`'s `llm.provider` / `llm.model`.
+3. A built-in default for known providers (`deepseek`, `openai`,
+   `anthropic`) — see `PROVIDER_DEFAULTS` in `src/llm.py` for the current
+   values. A provider not in that list (Groq, a local server, ...) needs
+   `config.yaml`'s `llm.base_url` set explicitly (no env override for
+   `base_url`).
+
+So the fastest way to try Anthropic instead, with no file edits: set
+`LLM_PROVIDER=anthropic` (and optionally `LLM_MODEL`) in `.env`. Anthropic's
+OpenAI-compatible endpoint is explicitly "test and comparison" per their own
+docs, not their recommended production path, and doesn't support prompt
+caching (the native Anthropic SDK does) — it works fine here, just worth
+knowing before relying on it for the unattended daily run.
 
 ### 3. Master CV (one-time)
 
@@ -278,8 +295,9 @@ Claude Code.
 
 - `source.prefer_direct` — rank postings whose apply URL resolves to a company
   ATS (Greenhouse/Lever/Ashby) above plain board listings.
-- `llm.*` — provider/model/base_url, token caps, and the budget guard
-  (`rough_tokens_per_job`, `budget_ceiling_tokens`).
+- `llm.*` — provider/model/base_url (see [LLM provider key](#2-llm-provider-key)
+  for the full env → config.yaml → built-in-default precedence), token caps,
+  and the budget guard (`rough_tokens_per_job`, `budget_ceiling_tokens`).
 - `rollover.archive_new_after_days` — stale `New` rows move to `Archived` (never
   `Applying`).
 

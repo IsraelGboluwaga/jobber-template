@@ -33,11 +33,15 @@ MASTER_CV_PATH = REPO_ROOT / "data" / "master_cv.json"
 class Secrets:
     """Runtime secrets, read from the environment only."""
 
-    # Key for whichever LLM provider config.yaml -> llm.base_url points at
-    # (DeepSeek, OpenAI, Anthropic's OpenAI-compatible endpoint, a local
-    # server, ...). One env var regardless of provider — swap providers by
-    # editing config.yaml, not by renaming secrets.
+    # Key for whichever LLM provider is resolved (see src/llm.py's
+    # resolve_llm). One env var regardless of provider — swap providers via
+    # LLM_PROVIDER/config.yaml, not by renaming secrets.
     llm_api_key: str = ""
+    # Optional overrides for src/llm.py's provider/model resolution. Empty
+    # means "fall through to config.yaml, then the built-in default" — see
+    # resolve_llm's docstring for the full precedence order.
+    llm_provider: str = ""
+    llm_model: str = ""
     notion_token: str = ""
     notion_database_id: str = ""
     ntfy_topic: str = ""
@@ -46,6 +50,8 @@ class Secrets:
     def from_env(cls) -> Secrets:
         return cls(
             llm_api_key=os.environ.get("LLM_API_KEY", ""),
+            llm_provider=os.environ.get("LLM_PROVIDER", ""),
+            llm_model=os.environ.get("LLM_MODEL", ""),
             notion_token=os.environ.get("NOTION_TOKEN", ""),
             notion_database_id=os.environ.get("NOTION_DATABASE_ID", ""),
             ntfy_topic=os.environ.get("NTFY_TOPIC", ""),

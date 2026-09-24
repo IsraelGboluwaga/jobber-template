@@ -10,24 +10,26 @@ source:
   prefer_direct: true
 
 llm:
-  # Any OpenAI-compatible chat-completions endpoint works here — swap these
-  # three fields to change provider, no code change needed. The API key comes
-  # from the LLM_API_KEY env var/secret regardless of provider. Examples:
-  #   DeepSeek (default, cheap):
-  #     provider: deepseek  model: deepseek-chat  base_url: https://api.deepseek.com
-  #   OpenAI:
-  #     provider: openai    model: gpt-4o-mini    base_url: https://api.openai.com/v1
-  #   Anthropic (OpenAI-compatible endpoint — Anthropic's own docs call this
-  #   layer test/comparison-oriented, not their recommended production path;
-  #   it also doesn't support prompt caching, unlike the native Claude SDK):
-  #     provider: anthropic model: claude-haiku-4-5-20251001  base_url: https://api.anthropic.com/v1/
-  #   Local (vLLM/Ollama/etc.), or any other OpenAI-compatible host:
-  #     provider: local      model: <served-model-name>  base_url: http://localhost:11434/v1
+  # Any OpenAI-compatible chat-completions endpoint works here. `model` and
+  # `base_url` are OPTIONAL — src/llm.py's PROVIDER_DEFAULTS fills in a known
+  # provider's defaults when they're omitted (see that file for the current
+  # list: deepseek, openai, anthropic). `provider` itself, and `model`, can
+  # also be set via the LLM_PROVIDER / LLM_MODEL env vars instead of editing
+  # this file — handy for a quick local swap, or a GitHub Actions repo
+  # Variable so a fork can switch provider without a commit. Env wins over
+  # what's here; what's here wins over the built-in default. The API key
+  # always comes from LLM_API_KEY regardless of provider.
+  #
+  # Only base_url has no env override. A provider with no built-in default
+  # (Groq, a local vLLM/Ollama server, ...) needs it set explicitly, e.g.:
+  #   provider: local  model: <served-model-name>  base_url: http://localhost:11434/v1
   provider: deepseek
+  # Overrides PROVIDER_DEFAULTS' "deepseek-chat" — pick your own DeepSeek tier
+  # here, or delete this line to take the built-in default.
   model: deepseek-flash
-  base_url: https://api.deepseek.com
   # Thinking/reasoning toggle — only meaningful for providers that support it
-  # (currently applied for provider: deepseek). Harmless no-op otherwise.
+  # (currently applied when the resolved provider is deepseek). Harmless
+  # no-op otherwise.
   thinking: false
   max_tokens_cv: 1500
   max_tokens_answers: 800

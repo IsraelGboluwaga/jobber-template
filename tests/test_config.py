@@ -69,8 +69,10 @@ def test_missing_sections_default_to_empty_dict():
     assert cfg.ntfy_topic == ""
 
 
-def test_secrets_from_env_reads_all_four(monkeypatch):
+def test_secrets_from_env_reads_all_six(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "sk-1")
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("LLM_MODEL", "claude-sonnet-5")
     monkeypatch.setenv("NOTION_TOKEN", "ntn-1")
     monkeypatch.setenv("NOTION_DATABASE_ID", "db-1")
     monkeypatch.setenv("NTFY_TOPIC", "topic-1")
@@ -78,6 +80,18 @@ def test_secrets_from_env_reads_all_four(monkeypatch):
     secrets = Secrets.from_env()
 
     assert secrets.llm_api_key == "sk-1"
+    assert secrets.llm_provider == "anthropic"
+    assert secrets.llm_model == "claude-sonnet-5"
     assert secrets.notion_token == "ntn-1"
     assert secrets.notion_database_id == "db-1"
     assert secrets.ntfy_topic == "topic-1"
+
+
+def test_secrets_from_env_llm_provider_and_model_default_empty(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+
+    secrets = Secrets.from_env()
+
+    assert secrets.llm_provider == ""
+    assert secrets.llm_model == ""

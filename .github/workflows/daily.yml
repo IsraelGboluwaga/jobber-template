@@ -29,6 +29,13 @@ jobs:
       - name: Run pipeline
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          # Optional repo Variables (Settings -> Secrets and variables ->
+          # Actions -> Variables tab, NOT Secrets — these aren't sensitive).
+          # Set them to switch LLM provider/model without touching
+          # config.yaml or making a commit. Empty/unset falls through to
+          # config.yaml, then src/llm.py's built-in default.
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
