@@ -4,6 +4,10 @@ Not called by the daily pipeline — a one-time (or whenever-you-want-to-redo-it
 convenience for filling in preferences.yaml without hand-editing YAML. Doesn't
 touch secrets (.env) or data/master_cv.json; see the README for those steps.
 
+Every prompt's default comes from whatever is already in preferences.yaml (the
+committed example on a fresh clone, or your own answers on a re-run) — there's
+no separate copy of "the defaults" to keep in sync with that file.
+
 Usage:
     uv run python scripts/setup.py
 """
@@ -11,43 +15,21 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PREFERENCES_PATH = REPO_ROOT / "preferences.yaml"
 
-DEFAULT_TITLES = ["Senior Backend Engineer", "Staff Backend Engineer", "Senior Software Engineer"]
-DEFAULT_LOCATIONS = ["United Kingdom", "Ireland", "Netherlands", "Germany", "Remote"]
-DEFAULT_SENIORITY = ["mid-level", "senior"]
-DEFAULT_BOARDS = ["indeed", "linkedin", "glassdoor", "google"]
-DEFAULT_WELCOME_REGIONS = ["UK", "Ireland", "EU"]
-DEFAULT_REMOTE_HOME_SIGNALS = ["worldwide", "global", "anywhere"]
 
-# Region label -> known country_hints entries this wizard can offer to include.
-KNOWN_REGIONS: dict[str, list[tuple[str, str, str]]] = {
-    "UK": [("united kingdom", "UK", "UK"), ("uk", "UK", "UK"), ("london", "UK", "UK")],
-    "Ireland": [("ireland", "Ireland", "Ireland"), ("dublin", "Ireland", "Ireland")],
-    "EU": [
-        ("germany", "Germany", "EU"), ("berlin", "Germany", "EU"),
-        ("netherlands", "Netherlands", "EU"), ("amsterdam", "Netherlands", "EU"),
-        ("france", "France", "EU"), ("spain", "Spain", "EU"), ("portugal", "Portugal", "EU"),
-    ],
-    "Canada": [("canada", "Canada", "Canada"), ("toronto", "Canada", "Canada")],
-    "US": [
-        ("united states", "US", "US"), ("usa", "US", "US"),
-        ("new york", "US", "US"), ("san francisco", "US", "US"), ("remote us", "US", "US"),
-    ],
-    "Australia": [
-        ("australia", "Australia", "Australia"),
-        ("sydney", "Australia", "Australia"), ("melbourne", "Australia", "Australia"),
-    ],
-    "New Zealand": [("new zealand", "New Zealand", "New Zealand")],
-    "Singapore": [("singapore", "Singapore", "Singapore")],
-    "Middle East": [
-        ("united arab emirates", "UAE", "Middle East"),
-        ("uae", "UAE", "Middle East"), ("dubai", "UAE", "Middle East"),
-    ],
-    "India": [("india", "India", "India")],
-}
+def _load_existing() -> dict[str, Any]:
+    if not PREFERENCES_PATH.exists():
+        return {}
+    try:
+        return yaml.safe_load(PREFERENCES_PATH.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return {}
 
 
 def ask(prompt: str, default: str) -> str:
@@ -98,17 +80,26 @@ def yaml_block_list(items: list[str], indent: str = "    ") -> str:
     return "\n".join(f"{indent}- {item}" for item in items)
 
 
-def build_country_hints(welcome_regions: list[str], home_city: str, home_country: str, home_region: str) -> str:
+def build_country_hints(
+    existing_hints: dict[str, Any], welcome_regions: list[str],
+    home_city: str, home_country: str, home_region: str,
+) -> str:
+    """Keep every existing hint whose region is one of welcome_regions, plus
+    the candidate's own home entry. Sourced from preferences.yaml's own
+    country_hints (not a second, separately-maintained table), so it can
+    never drift from it."""
+    wanted_regions = {r.strip().lower() for r in welcome_regions}
     lines: list[str] = []
-    seen_regions = set()
-    for region in welcome_regions:
-        entries = KNOWN_REGIONS.get(region)
-        if not entries or region in seen_regions:
+    seen_keys: set[str] = set()
+    for key, value in (existing_hints or {}).items():
+        region = str(value.get("region", "")) if isinstance(value, dict) else ""
+        if region.strip().lower() not in wanted_regions:
             continue
-        seen_regions.add(region)
-        for key, country, hint_region in entries:
-            lines.append(f"    {key}: {{country: {country}, region: {hint_region}}}")
-    if home_city:
+        country = value.get("country", "") if isinstance(value, dict) else ""
+        lines.append(f"    {key}: {{country: {country}, region: {region}}}")
+        seen_keys.add(str(key).lower())
+
+    if home_city and home_city.lower() not in seen_keys:
         lines.append(f"    {home_city.lower()}: {{country: {home_country}, region: {home_region}}}")
     if not lines:
         lines.append("    # add entries here, e.g. london: {country: UK, region: UK}")
@@ -125,36 +116,62 @@ def main() -> int:
         print("Aborted, nothing written.")
         return 0
 
+    existing = _load_existing()
+    existing_candidate = existing.get("candidate") or {}
+    existing_search = existing.get("search") or {}
+    existing_geo = existing.get("geo") or {}
+    existing_salary = existing.get("salary") or {}
+    existing_fx = existing_salary.get("fx") or {"USD": 1.0, "GBP": 1.27, "EUR": 1.08,
+                                                 "AUD": 0.66, "SGD": 0.74, "CAD": 0.73}
+
     home_city = ask_required("Your city (used only in human-readable drop reasons)", "Lagos")
     home_country = ask_required("Your country", "Nigeria")
     home_region = ask_required(
         "Your region label (used in remote-eligibility matching)", "Africa, LatAm, EMEA"
     )
-    home_base_code = ask("Short country code tag (cosmetic only)", home_country[:2].upper())
+    home_base_code = ask("Short country code tag (cosmetic only)",
+                          existing_candidate.get("home_base_code") or home_country[:2].upper())
 
-    titles = ask_list("Job titles you're targeting", DEFAULT_TITLES)
-    locations = ask_list("Locations to search (JobSpy query strings)", DEFAULT_LOCATIONS)
-    seniority = ask_list("Seniority levels", DEFAULT_SENIORITY)
-    boards = ask_list("Job boards to query", DEFAULT_BOARDS)
-    country_indeed = ask("country_indeed (drives Indeed/Glassdoor regional endpoint)", locations[0] if locations else "United Kingdom")
-    max_age_days = ask_int("Skip postings older than N days", 30)
-    count = ask_int("Target roles to tailor + write per run", 10)
-    hard_max = ask_int("Absolute ceiling per run", 15)
+    titles = ask_list("Job titles you're targeting",
+                       existing_search.get("titles") or ["Senior Backend Engineer"])
+    locations = ask_list("Locations to search (JobSpy query strings)",
+                          existing_search.get("locations") or ["Remote"])
+    seniority = ask_list("Seniority levels", existing_search.get("seniority") or ["mid-level", "senior"])
+    boards = ask_list("Job boards to query",
+                       existing_search.get("boards") or ["indeed", "linkedin", "glassdoor", "google"])
+    country_indeed = ask(
+        "country_indeed (drives Indeed/Glassdoor regional endpoint)",
+        existing_search.get("country_indeed") or (locations[0] if locations else "United Kingdom"),
+    )
+    max_age_days = ask_int("Skip postings older than N days", int(existing_search.get("max_age_days") or 30))
+    count = ask_int("Target roles to tailor + write per run", int(existing_search.get("count") or 10))
+    hard_max = ask_int("Absolute ceiling per run", int(existing_search.get("hard_max") or 15))
 
-    exclude_countries = ask_list("Countries to hard-exclude (never surface)", [])
-    welcome_regions = ask_list("Welcome regions (conceptual buckets, e.g. UK, Ireland, EU, Australia, Middle East, Singapore, India, Canada, US)", DEFAULT_WELCOME_REGIONS)
+    exclude_countries = ask_list("Countries to hard-exclude (never surface)",
+                                  existing_geo.get("exclude_countries") or [])
+    welcome_regions = ask_list(
+        "Welcome regions (conceptual buckets, e.g. UK, Ireland, EU, Australia, Middle East, Singapore, India, Canada, US)",
+        existing_geo.get("welcome_regions") or ["UK", "Ireland", "EU"],
+    )
+    default_signals = existing_geo.get("remote_home_signals") or ["worldwide", "global", "anywhere"]
     remote_home_signals = ask_list(
         "Words that make a remote role eligible from your home region (e.g. worldwide, global, anywhere, your region name)",
-        DEFAULT_REMOTE_HOME_SIGNALS + ([home_region] if home_region not in DEFAULT_REMOTE_HOME_SIGNALS else []),
+        [*default_signals, home_region] if home_region.lower() not in [s.lower() for s in default_signals] else default_signals,
     )
-    onsite_dead_regions = ask_list("Regions where onsite/hybrid is a hard drop for you (e.g. US, Canada)", [])
-    unlisted_region = ask("Unlisted-region handling: low (rank last) or drop", "low")
-    hard_sponsorship_filter = ask_bool("Hard-drop roles explicitly marked no-sponsorship", False)
+    onsite_dead_regions = ask_list("Regions where onsite/hybrid is a hard drop for you (e.g. US, Canada)",
+                                    existing_geo.get("onsite_dead_regions") or [])
+    unlisted_region = ask("Unlisted-region handling: low (rank last) or drop",
+                           existing_geo.get("unlisted_region") or "low")
+    hard_sponsorship_filter = ask_bool("Hard-drop roles explicitly marked no-sponsorship",
+                                        bool(existing_geo.get("hard_sponsorship_filter", False)))
 
-    min_usd = ask_int("Minimum salary, USD", 40000)
-    max_usd = ask_int("Maximum salary, USD", 200000)
+    min_usd = ask_int("Minimum salary, USD", int(existing_salary.get("min_usd") or 40000))
+    max_usd = ask_int("Maximum salary, USD", int(existing_salary.get("max_usd") or 200000))
 
-    country_hints_block = build_country_hints(welcome_regions, home_city, home_country, home_region)
+    country_hints_block = build_country_hints(
+        existing_geo.get("country_hints") or {}, welcome_regions, home_city, home_country, home_region
+    )
+    fx_block = "\n".join(f"    {code}: {rate}" for code, rate in existing_fx.items())
 
     content = f"""# Your job-search preferences — generated by scripts/setup.py.
 # Re-run the wizard any time, or hand-edit this file directly.
@@ -213,12 +230,7 @@ salary:
   max_usd: {max_usd}
   # Manual FX refresh. Multiply local amount by factor to get USD.
   fx:
-    USD: 1.0
-    GBP: 1.27
-    EUR: 1.08
-    AUD: 0.66
-    SGD: 0.74
-    CAD: 0.73
+{fx_block}
 """
 
     PREFERENCES_PATH.write_text(content, encoding="utf-8")
