@@ -1,7 +1,8 @@
 # Your job-search preferences — this is the file you edit when you clone this
 # repo for yourself. Nothing secret goes here (see .env.example for that).
-# config.yaml holds pipeline/ops settings (LLM provider, budget caps, rollover);
-# this file holds *your* search criteria and where you're searching from.
+# config.yaml holds pipeline/ops settings (LLM provider/model overrides,
+# budget caps, rollover); this file holds *your* search criteria and where
+# you're searching from.
 #
 # Fastest way to fill this in: run `uv run python scripts/setup.py` (or, in
 # Claude Code, the `/setup` command) and answer the prompts — it writes this

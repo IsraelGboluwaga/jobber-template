@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.config import Secrets
+from src.config import Secrets, load_config
 from src.llm import PROVIDER_DEFAULTS, resolve_llm
 
 
@@ -87,3 +87,33 @@ def test_unknown_provider_fully_configured_resolves(make_cfg):
     resolved = resolve_llm(cfg)
 
     assert resolved == ("groq", "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1")
+
+
+def test_env_provider_override_ignores_leftover_model_even_without_a_provider_key(make_cfg):
+    """Regression: config.yaml can set llm.model without an explicit
+    llm.provider line (the committed config.yaml itself does this — see its
+    comments). An LLM_PROVIDER override must still not inherit that model,
+    because it was implicitly scoped to DEFAULT_PROVIDER (deepseek), not to
+    whatever provider ends up resolved."""
+    cfg = make_cfg(llm={"provider": None, "model": "deepseek-flash", "base_url": None})
+    cfg.secrets = Secrets(llm_provider="anthropic")
+
+    resolved = resolve_llm(cfg)
+
+    assert resolved.provider == "anthropic"
+    assert resolved.model == PROVIDER_DEFAULTS["anthropic"]["model"]  # NOT "deepseek-flash"
+    assert resolved.base_url == PROVIDER_DEFAULTS["anthropic"]["base_url"]
+
+
+def test_resolves_against_real_config_yaml_with_no_env_set(monkeypatch):
+    """Guard for the actual shipped config.yaml, which deliberately leaves
+    llm.provider/model/base_url unset: a fresh clone with zero env vars must
+    still resolve to a real, working default (currently DeepSeek)."""
+    for var in ("LLM_PROVIDER", "LLM_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+
+    resolved = resolve_llm(load_config())
+
+    assert resolved.provider
+    assert resolved.model
+    assert resolved.base_url

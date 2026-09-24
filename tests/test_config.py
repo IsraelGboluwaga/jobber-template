@@ -17,8 +17,12 @@ def test_load_config_merges_real_preferences_and_config_files():
     assert cfg.geo.get("welcome_regions")
     assert isinstance(cfg.geo.get("country_hints"), dict) and cfg.geo["country_hints"]
     assert cfg.salary.get("min_usd") is not None
-    assert cfg.llm.get("provider")
+    assert cfg.llm.get("max_tokens_cv") is not None
     assert cfg.rollover.get("archive_new_after_days") is not None
+    # llm.provider/model/base_url are deliberately absent from the committed
+    # config.yaml (set via LLM_PROVIDER/LLM_MODEL env vars instead) — see
+    # test_llm.py's test_resolves_against_real_config_yaml_with_no_env_set
+    # for the guard that a fresh clone still resolves to a working default.
 
 
 def test_config_yaml_wins_on_key_collision_with_preferences(tmp_path):

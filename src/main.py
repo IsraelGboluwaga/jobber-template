@@ -7,7 +7,9 @@ write to Notion (row + child CV page + answers) -> rollover -> notify.
 
 Cost/safety guards are enforced here: hard_max clamp before the LLM loop,
 viability before any LLM call, budget preflight, explicit max_tokens (in llm.py),
-thinking off (llm.py), token logging to stdout.
+thinking off where the resolved provider supports the toggle — currently
+DeepSeek only, see llm.py's resolve_llm/_thinking_extra_body — and token
+logging to stdout.
 """
 from __future__ import annotations
 

@@ -24,8 +24,9 @@ review. See `README.md` for the full setup flow and architecture.
 
 - `preferences.yaml` — the file a user (or the `/setup` command / `scripts/setup.py`
   wizard) edits: search titles/locations, geo eligibility rules, salary band.
-- `config.yaml` — pipeline/ops settings (LLM provider/model, token budgets,
-  rollover). Rarely touched by an end user.
+- `config.yaml` — pipeline/ops settings (optional LLM provider/model
+  overrides, token budgets, rollover). Rarely touched by an end user; the
+  committed file deliberately leaves `llm.provider`/`llm.model` unset.
 - Both are committed and secret-free by design; `src/config.py` merges them
   (`config.yaml` wins on key collisions) plus `Secrets.from_env()`.
 - LLM provider/model resolve through `src/llm.py`'s `resolve_llm`:

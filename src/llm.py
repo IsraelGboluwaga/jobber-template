@@ -42,7 +42,7 @@ log = logging.getLogger(__name__)
 # else just needs config.yaml -> llm.base_url (and usually llm.model) set
 # explicitly. Keep these current: a stale default here is worse than none.
 PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
-    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
+    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-flash"},
     "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-6-luna"},
     "anthropic": {"base_url": "https://api.anthropic.com/v1/", "model": "claude-haiku-4-5-20251001"},
 }
@@ -73,18 +73,18 @@ def resolve_llm(cfg) -> ResolvedLLM:
     order. Pure function — no network, no client construction — so it's unit
     tested directly rather than through a live call.
 
-    config.yaml's llm.model/llm.base_url are only applied when config.yaml's
-    own llm.provider matches the resolved provider. Otherwise an LLM_PROVIDER
-    override would silently inherit another provider's base_url/model (e.g.
-    DeepSeek's base_url surviving an override to anthropic) — a config.yaml
-    with no provider line at all counts as matching anything.
+    config.yaml's llm.model/llm.base_url are scoped to whichever provider
+    config.yaml itself implies — its own llm.provider, or DEFAULT_PROVIDER if
+    it doesn't set one — and only apply when that matches the resolved
+    provider. Otherwise an LLM_PROVIDER override would silently inherit
+    values tuned for a different provider (e.g. DeepSeek's model name sent to
+    Anthropic), whether or not config.yaml bothered to spell out `provider:`.
     """
     config_provider_raw = cfg.llm.get("provider")
     provider = (cfg.secrets.llm_provider or config_provider_raw or DEFAULT_PROVIDER).strip().lower()
     defaults = PROVIDER_DEFAULTS.get(provider, {})
-    provider_matches_config = (
-        not config_provider_raw or str(config_provider_raw).strip().lower() == provider
-    )
+    implied_config_provider = str(config_provider_raw or DEFAULT_PROVIDER).strip().lower()
+    provider_matches_config = implied_config_provider == provider
 
     base_url = (cfg.llm.get("base_url") if provider_matches_config else None) or defaults.get("base_url")
     if not base_url:

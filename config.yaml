@@ -10,23 +10,22 @@ source:
   prefer_direct: true
 
 llm:
-  # Any OpenAI-compatible chat-completions endpoint works here. `model` and
-  # `base_url` are OPTIONAL — src/llm.py's PROVIDER_DEFAULTS fills in a known
-  # provider's defaults when they're omitted (see that file for the current
-  # list: deepseek, openai, anthropic). `provider` itself, and `model`, can
-  # also be set via the LLM_PROVIDER / LLM_MODEL env vars instead of editing
-  # this file — handy for a quick local swap, or a GitHub Actions repo
-  # Variable so a fork can switch provider without a commit. Env wins over
-  # what's here; what's here wins over the built-in default. The API key
-  # always comes from LLM_API_KEY regardless of provider.
+  # provider/model/base_url are all OPTIONAL and deliberately left unset here
+  # — set them via the LLM_PROVIDER / LLM_MODEL env vars instead (.env
+  # locally, or a GitHub Actions repo Variable so a fork can switch provider
+  # with no commit). Leaving everything unset (env AND this file) still
+  # works: src/llm.py's PROVIDER_DEFAULTS supplies a real default provider
+  # and model (currently DeepSeek). See that file for the current built-in
+  # list (deepseek, openai, anthropic) — keep it in sync with the README's
+  # provider count if you add to it.
   #
-  # Only base_url has no env override. A provider with no built-in default
-  # (Groq, a local vLLM/Ollama server, ...) needs it set explicitly, e.g.:
+  # Full priority order: LLM_PROVIDER/LLM_MODEL env vars -> provider/model
+  # below (if you do set them) -> PROVIDER_DEFAULTS. base_url has no env
+  # override; a provider with no built-in default (Groq, a local
+  # vLLM/Ollama server, ...) needs it set explicitly here, e.g.:
   #   provider: local  model: <served-model-name>  base_url: http://localhost:11434/v1
-  provider: deepseek
-  # Overrides PROVIDER_DEFAULTS' "deepseek-chat" — pick your own DeepSeek tier
-  # here, or delete this line to take the built-in default.
-  model: deepseek-flash
+  # The API key itself always comes from LLM_API_KEY regardless of provider.
+  #
   # Thinking/reasoning toggle — only meaningful for providers that support it
   # (currently applied when the resolved provider is deepseek). Harmless
   # no-op otherwise.

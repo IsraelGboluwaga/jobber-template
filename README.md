@@ -9,7 +9,8 @@ each morning on GitHub Actions and:
 1. Finds ~10 postings matching your criteria across the consumer job boards
    (LinkedIn / Indeed / Glassdoor / Google, via JobSpy).
 2. Deduplicates, drops roles that don't match your location/sponsorship rules, and ranks the rest.
-3. Tailors your CV to each new posting (via any OpenAI-compatible LLM API — DeepSeek by default).
+3. Tailors your CV to each new posting via an LLM — **3 providers built in**
+   (DeepSeek, OpenAI, Anthropic), plus any other OpenAI-compatible endpoint.
 4. Drafts answers to each posting's application questions, if any.
 5. Writes one row per job into a Notion database, with the tailored CV on its own
    linked page and any drafted answers in the row's page body.
@@ -40,8 +41,10 @@ above (or fork it) to get your own copy, then:
    [Configuration](#configuration-preferencesyaml--configyaml) section below
    for what every field does.
 3. **Set up secrets**: `cp .env.example .env` and fill it in locally; add the
-   same four values as GitHub Actions repo secrets before you rely on the
-   scheduled run (see [step 5](#5-github-actions-secrets) below).
+   required ones as GitHub Actions repo secrets before you rely on the
+   scheduled run — see [Environment variables](#environment-variables) for
+   the full list of what's required vs. optional, and
+   [step 5](#5-github-actions-secrets) for how to add them on GitHub.
 4. **Create the Notion database** and **import your CV** — one-time setup,
    covered in detail in [Setup](#setup) below.
 5. **Try it safely first**:
@@ -205,17 +208,40 @@ notification channel, not a secret.
 
 ### 5. GitHub Actions secrets
 
-In the repo: *Settings → Secrets and variables → Actions → New repository secret*,
-add all four:
+In the repo: *Settings → Secrets and variables → Actions*:
 
-- `LLM_API_KEY`
-- `NOTION_TOKEN`
-- `NOTION_DATABASE_ID`
-- `NTFY_TOPIC`
+- Add `LLM_API_KEY`, `NOTION_TOKEN`, and `NOTION_DATABASE_ID` as **Secrets**
+  (required), plus `NTFY_TOPIC` too if you're overriding `config.yaml`'s default.
+- Optionally add `LLM_PROVIDER` / `LLM_MODEL` as **Variables** (a separate tab
+  from Secrets — these aren't sensitive) to switch LLM provider without
+  editing `config.yaml` or making a commit.
+
+See [Environment variables](#environment-variables) below for the full list.
 
 Nothing secret is ever committed. `.env` is gitignored. The workflow injects these
 as env vars. Leave GitHub's built-in failure email on — it's the backstop under
 ntfy.
+
+---
+
+## Environment variables
+
+Everything below lives in `.env` for local runs (`cp .env.example .env`); in
+GitHub Actions, the required ones are repo **Secrets** and the LLM
+provider/model overrides are repo **Variables** — see
+[step 5](#5-github-actions-secrets) above.
+
+| Variable | Required? | GitHub Actions | Purpose |
+|---|---|---|---|
+| `LLM_API_KEY` | Required | Secret | API key for whichever LLM provider is resolved — see [LLM provider key](#2-llm-provider-key). |
+| `LLM_PROVIDER` | Optional | Variable | Override the LLM provider (default: `deepseek`). |
+| `LLM_MODEL` | Optional | Variable | Override the model (default: the resolved provider's built-in default). |
+| `NOTION_TOKEN` | Required | Secret | Notion internal integration token, scoped to the jobs database only. |
+| `NOTION_DATABASE_ID` | Required | Secret | The jobs database's id (from its URL). |
+| `NTFY_TOPIC` | Optional | Secret | Override `config.yaml`'s `notify.ntfy_topic`. |
+| `CV_NOTION_PAGE_ID` | Required, but only for `scripts/import_cv.py` | Not needed in Actions | Notion page id holding your resume — the daily run never uses it, only the one-time CV import. |
+
+Nothing secret is ever committed — `.env` is gitignored.
 
 ---
 

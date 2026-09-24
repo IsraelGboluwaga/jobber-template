@@ -16,6 +16,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Mirrors preferences.yaml + config.yaml's shape, trimmed to what tests need.
 # Individual tests override only the keys they care about via make_cfg(**overrides).
+# Note: llm.provider/model/base_url are set here even though the real,
+# committed config.yaml deliberately leaves them unset (env-var driven) — a
+# fully-specified llm section is what most tests want to override pieces of;
+# see test_llm.py for cases that specifically test the unset/env-driven paths.
 DEFAULT_RAW: dict[str, Any] = {
     "candidate": {"home_base": "Nigeria", "home_base_code": "NG"},
     "search": {

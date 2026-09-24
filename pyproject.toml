@@ -5,7 +5,7 @@ description = "Lightweight scheduled daily job-search pipeline (no server, no UI
 requires-python = ">=3.11"
 dependencies = [
     "python-jobspy>=1.1.80",   # consumer boards (LinkedIn/Indeed/Glassdoor/Google/ZipRecruiter)
-    "openai>=1.40.0",          # OpenAI-compatible client; provider set in config.yaml (DeepSeek by default)
+    "openai>=1.40.0",          # OpenAI-compatible client; provider resolved via env/config.yaml (DeepSeek by default)
     "notion-client>=2.2.1",    # official Notion SDK for Python
     "requests>=2.31.0",        # ntfy POST
     "PyYAML>=6.0",             # preferences.yaml + config.yaml
@@ -36,7 +36,7 @@ typeCheckingMode = "basic"
 
 [tool.pytest.ini_options]
 # Unit tests only: pure/deterministic logic (classify, viability, dedup, score,
-# config merging, the Notion block-flattening walk). No network, no LLM calls,
-# no live Notion/GitHub. testpaths keeps `uv run pytest` from also collecting
-# .venv.
+# config merging, LLM provider/model resolution, the Notion block-flattening
+# walk). No network, no live LLM calls, no live Notion/GitHub. testpaths keeps
+# `uv run pytest` from also collecting .venv.
 testpaths = ["tests"]

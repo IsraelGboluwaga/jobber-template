@@ -40,10 +40,12 @@ Then:
 - Remind them what's still manual, in one short list:
   - `cp .env.example .env` and fill in `LLM_API_KEY` / `NOTION_TOKEN` /
     `NOTION_DATABASE_ID` (README has the Notion database setup steps; the LLM
-    provider itself — DeepSeek by default — is swappable via `config.yaml`).
+    provider itself — DeepSeek by default — is swappable via the
+    `LLM_PROVIDER`/`LLM_MODEL` env vars, no `config.yaml` edit needed).
   - Building `data/master_cv.json` via `scripts/import_cv.py` from a Notion
     page holding their resume.
-  - Adding the four secrets to GitHub Actions (Settings → Secrets and
-    variables → Actions) before the scheduled workflow can run.
+  - Adding the required secrets (and, optionally, `LLM_PROVIDER`/`LLM_MODEL`
+    as repo Variables) to GitHub Actions before the scheduled workflow can
+    run — see the README's "Environment variables" section for the full list.
 - Do not run the pipeline, touch git, or fill in secrets yourself — this
   command only edits `preferences.yaml`.
