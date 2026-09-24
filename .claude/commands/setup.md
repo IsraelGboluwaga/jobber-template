@@ -38,8 +38,9 @@ Then:
   include their home city/country plus entries for each welcome region (see
   the existing table for the country -> region mapping convention).
 - Remind them what's still manual, in one short list:
-  - `cp .env.example .env` and fill in `DEEPSEEK_API_KEY` / `NOTION_TOKEN` /
-    `NOTION_DATABASE_ID` (README has the Notion database setup steps).
+  - `cp .env.example .env` and fill in `LLM_API_KEY` / `NOTION_TOKEN` /
+    `NOTION_DATABASE_ID` (README has the Notion database setup steps; the LLM
+    provider itself — DeepSeek by default — is swappable via `config.yaml`).
   - Building `data/master_cv.json` via `scripts/import_cv.py` from a Notion
     page holding their resume.
   - Adding the four secrets to GitHub Actions (Settings → Secrets and

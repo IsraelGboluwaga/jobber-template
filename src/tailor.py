@@ -28,8 +28,9 @@ GROUNDING = (
 
 
 def _cv_block(master_cv: dict) -> str:
-    # Put the static master CV first in the user message so DeepSeek prefix
-    # caching applies across jobs within a run.
+    # Put the static master CV first in the user message so providers with
+    # prompt/prefix caching (e.g. DeepSeek, Anthropic) can reuse it across
+    # jobs within a run.
     return "MASTER CV (source of truth, JSON):\n" + json.dumps(master_cv, ensure_ascii=False)
 
 

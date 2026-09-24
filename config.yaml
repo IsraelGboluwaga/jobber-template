@@ -10,10 +10,23 @@ source:
   prefer_direct: true
 
 llm:
+  # Any OpenAI-compatible chat-completions endpoint works here — swap these
+  # three fields to change provider, no code change needed. The API key comes
+  # from the LLM_API_KEY env var/secret regardless of provider. Examples:
+  #   DeepSeek (default, cheap):
+  #     provider: deepseek  model: deepseek-chat  base_url: https://api.deepseek.com
+  #   OpenAI:
+  #     provider: openai    model: gpt-4o-mini    base_url: https://api.openai.com/v1
+  #   Anthropic (OpenAI-compatible endpoint):
+  #     provider: anthropic model: claude-haiku-4-5  base_url: https://api.anthropic.com/v1
+  #   Local (vLLM/Ollama/etc.), or any other OpenAI-compatible host:
+  #     provider: local      model: <served-model-name>  base_url: http://localhost:11434/v1
   provider: deepseek
   model: deepseek-flash
-  base_url: https://api.deepseek.com   # OpenAI-compatible endpoint
-  thinking: false                       # DeepSeek: off by default; sent explicitly when false
+  base_url: https://api.deepseek.com
+  # Thinking/reasoning toggle — only meaningful for providers that support it
+  # (currently applied for provider: deepseek). Harmless no-op otherwise.
+  thinking: false
   max_tokens_cv: 1500
   max_tokens_answers: 800
   # Pre-flight budget guard. Aborts the run if the estimate exceeds the ceiling.

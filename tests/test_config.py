@@ -70,14 +70,14 @@ def test_missing_sections_default_to_empty_dict():
 
 
 def test_secrets_from_env_reads_all_four(monkeypatch):
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-1")
+    monkeypatch.setenv("LLM_API_KEY", "sk-1")
     monkeypatch.setenv("NOTION_TOKEN", "ntn-1")
     monkeypatch.setenv("NOTION_DATABASE_ID", "db-1")
     monkeypatch.setenv("NTFY_TOPIC", "topic-1")
 
     secrets = Secrets.from_env()
 
-    assert secrets.deepseek_api_key == "sk-1"
+    assert secrets.llm_api_key == "sk-1"
     assert secrets.notion_token == "ntn-1"
     assert secrets.notion_database_id == "db-1"
     assert secrets.ntfy_topic == "topic-1"

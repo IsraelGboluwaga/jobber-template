@@ -28,7 +28,7 @@ jobs:
 
       - name: Run pipeline
         env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}

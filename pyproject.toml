@@ -5,7 +5,7 @@ description = "Lightweight scheduled daily job-search pipeline (no server, no UI
 requires-python = ">=3.11"
 dependencies = [
     "python-jobspy>=1.1.80",   # consumer boards (LinkedIn/Indeed/Glassdoor/Google/ZipRecruiter)
-    "openai>=1.40.0",          # OpenAI-compatible client, pointed at DeepSeek
+    "openai>=1.40.0",          # OpenAI-compatible client; provider set in config.yaml (DeepSeek by default)
     "notion-client>=2.2.1",    # official Notion SDK for Python
     "requests>=2.31.0",        # ntfy POST
     "PyYAML>=6.0",             # preferences.yaml + config.yaml

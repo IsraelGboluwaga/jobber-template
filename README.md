@@ -9,7 +9,7 @@ each morning on GitHub Actions and:
 1. Finds ~10 postings matching your criteria across the consumer job boards
    (LinkedIn / Indeed / Glassdoor / Google, via JobSpy).
 2. Deduplicates, drops roles that don't match your location/sponsorship rules, and ranks the rest.
-3. Tailors your CV to each new posting (DeepSeek via the OpenAI-compatible API).
+3. Tailors your CV to each new posting (via any OpenAI-compatible LLM API — DeepSeek by default).
 4. Drafts answers to each posting's application questions, if any.
 5. Writes one row per job into a Notion database, with the tailored CV on its own
    linked page and any drafted answers in the row's page body.
@@ -137,13 +137,19 @@ activate a venv or `pip install` manually.
 linked from the row's `Tailored CV` column. Open it → `•••` → *Export* → PDF /
 HTML / Markdown. Single-page export works on the Notion free plan.
 
-### 2. DeepSeek key
+### 2. LLM provider key
 
-Create a key at <https://platform.deepseek.com> and set `DEEPSEEK_API_KEY`. The
-client is OpenAI-compatible and pointed at `https://api.deepseek.com` (see
-`config.yaml → llm.base_url`). Model is `deepseek-flash`; thinking mode is sent
-explicitly disabled. To swap providers later (e.g. `gpt-5-mini`), change only
-`llm.provider` / `llm.model` / `llm.base_url` — no code change.
+The tailoring/answer-drafting calls go through a plain OpenAI-compatible
+client, so any provider that speaks that API works — DeepSeek, OpenAI,
+Anthropic's OpenAI-compatible endpoint, Groq, a local vLLM/Ollama server, and
+so on. Swapping providers is a `config.yaml` edit, never a code change; see
+the commented examples in `config.yaml → llm`.
+
+The template defaults to **DeepSeek** (cheap, and its `thinking` toggle is
+wired in explicitly): create a key at <https://platform.deepseek.com> and set
+`LLM_API_KEY`. Whichever provider you pick, the env var name is always
+`LLM_API_KEY` — only `config.yaml`'s `llm.provider` / `llm.model` /
+`llm.base_url` change.
 
 ### 3. Master CV (one-time)
 
@@ -163,7 +169,7 @@ resulting `data/master_cv.json`, never Notion, during a daily run.
    ```bash
    export CV_NOTION_PAGE_ID=<PAGE_ID>
    export NOTION_TOKEN=ntn_...
-   export DEEPSEEK_API_KEY=sk-...
+   export LLM_API_KEY=sk-...
    uv run python scripts/import_cv.py     # prints the JSON for review
    ```
 5. Review the printed JSON, then **commit `data/master_cv.json` by hand.**
@@ -185,7 +191,7 @@ notification channel, not a secret.
 In the repo: *Settings → Secrets and variables → Actions → New repository secret*,
 add all four:
 
-- `DEEPSEEK_API_KEY`
+- `LLM_API_KEY`
 - `NOTION_TOKEN`
 - `NOTION_DATABASE_ID`
 - `NTFY_TOPIC`
@@ -203,7 +209,7 @@ ntfy.
   uv run python -m src.main --dry-run
   ```
   Prints the full plan: every kept role with its viability label, and **every
-  dropped role with the reason**. Tailoring runs if a DeepSeek key is present;
+  dropped role with the reason**. Tailoring runs if `LLM_API_KEY` is present;
   otherwise it's skipped with a warning.
 
 - **Locally, for real:**

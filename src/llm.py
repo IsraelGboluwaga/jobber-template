@@ -1,17 +1,23 @@
 """Provider-agnostic LLM client (text generation).
 
 Exposes one function, `complete(system, user, max_tokens)`, driven entirely by
-config: base URL, key, model. Swapping provider later (gpt-5-mini, an open-weight
-host) is a config change, not a code change — it is an OpenAI-compatible client.
+config.yaml's `llm.*` section: base_url, model, provider label. It's a plain
+OpenAI-compatible client, so any provider that speaks that API works —
+DeepSeek, OpenAI, Anthropic's OpenAI-compatible endpoint, Groq, a local
+vLLM/Ollama server, etc. Swapping provider is a config change, never a code
+change. The API key itself always comes from the single LLM_API_KEY env var
+(see config.py's Secrets) regardless of which provider it's for.
 
 Per call:
   * max_tokens set explicitly from config.
-  * thinking mode off. DeepSeek: off by default; we also send it explicitly via
-    extra_body={"thinking": {"type": "disabled"}} (verified against
-    api-docs.deepseek.com). Non-DeepSeek providers ignore extra_body.
+  * thinking/reasoning mode off by default for providers that support toggling
+    it (currently: DeepSeek, via extra_body={"thinking": {"type": "disabled"}},
+    verified against api-docs.deepseek.com). Gated on `llm.provider ==
+    "deepseek"`; other providers just don't get the extra_body.
   * bounded retries: <=3, only on 429/5xx/timeouts, capped exponential backoff.
     Never retry a 4xx. No retry logic nested inside another retrying loop.
-  * static system prompt + master CV go first so DeepSeek prefix-caching applies.
+  * static system prompt + master CV go first so providers with prefix/prompt
+    caching (DeepSeek, Anthropic, ...) can reuse that prefix across calls.
 """
 from __future__ import annotations
 
@@ -38,10 +44,13 @@ def make_client(cfg):
     from openai import OpenAI
 
     llm = cfg.llm
-    key = cfg.secrets.deepseek_api_key
+    key = cfg.secrets.llm_api_key
     if not key:
-        raise RuntimeError("DEEPSEEK_API_KEY is not set.")
-    return OpenAI(api_key=key, base_url=llm.get("base_url", "https://api.deepseek.com"))
+        raise RuntimeError("LLM_API_KEY is not set.")
+    base_url = llm.get("base_url")
+    if not base_url:
+        raise RuntimeError("config.yaml -> llm.base_url is not set.")
+    return OpenAI(api_key=key, base_url=base_url)
 
 
 def _thinking_extra_body(cfg) -> dict:
@@ -68,9 +77,12 @@ def complete(system: str, user: str, max_tokens: int, *, client=None, cfg=None) 
         RateLimitError,
     )
 
-    model = cfg.llm.get("model", "deepseek-flash")
+    model = cfg.llm.get("model")
+    if not model:
+        raise ValueError("config.yaml -> llm.model is not set.")
     extra_body = _thinking_extra_body(cfg)
-    # System prompt first => stable prefix for DeepSeek automatic prefix caching.
+    # System prompt first => stable prefix for providers with automatic
+    # prompt/prefix caching (e.g. DeepSeek, Anthropic).
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
     delay = 1.0
