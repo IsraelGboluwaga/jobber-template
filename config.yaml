@@ -1,0 +1,29 @@
+# Daily job-search pipeline — pipeline/ops settings live here.
+# Your job-search criteria (titles, locations, geo rules, salary) live in
+# preferences.yaml instead — that's the file to edit for a fresh clone.
+# Nothing secret goes in either file. Secrets come from environment variables
+# (see .env.example). Both files ARE committed.
+
+source:
+  # Rank postings whose direct apply URL resolves to a company ATS
+  # (Greenhouse/Lever/Ashby) above plain board listings.
+  prefer_direct: true
+
+llm:
+  provider: deepseek
+  model: deepseek-flash
+  base_url: https://api.deepseek.com   # OpenAI-compatible endpoint
+  thinking: false                       # DeepSeek: off by default; sent explicitly when false
+  max_tokens_cv: 1500
+  max_tokens_answers: 800
+  # Pre-flight budget guard. Aborts the run if the estimate exceeds the ceiling.
+  rough_tokens_per_job: 4000
+  budget_ceiling_tokens: 80000
+
+rollover:
+  archive_new_after_days: 14   # New rows older than this move out of the working view
+
+notify:
+  # Pick something unlikely to collide — ntfy topics are a public global
+  # namespace, not an account you own. Override with the NTFY_TOPIC env/secret.
+  ntfy_topic: your-unique-job-alert-topic

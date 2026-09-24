@@ -1,0 +1,112 @@
+# Your job-search preferences — this is the file you edit when you clone this
+# repo for yourself. Nothing secret goes here (see .env.example for that).
+# config.yaml holds pipeline/ops settings (LLM provider, budget caps, rollover);
+# this file holds *your* search criteria and where you're searching from.
+#
+# Fastest way to fill this in: run `uv run python scripts/setup.py` (or, in
+# Claude Code, the `/setup` command) and answer the prompts — it writes this
+# file for you. Everything below is a worked EXAMPLE to illustrate the shape;
+# replace the values, not the structure.
+
+candidate:
+  # Free text, used only in human-readable drop-reason strings (e.g. "won't
+  # hire/sponsor from <home_base>"). Doesn't drive any decision — purely
+  # cosmetic. home_base_code is unused by logic today; keep it as a short tag.
+  home_base: Example City, Example Country
+  home_base_code: XX
+
+search:
+  titles:
+    - Senior Backend Engineer
+    - Staff Backend Engineer
+    - Senior Software Engineer
+  # Concrete query strings JobSpy actually fetches. This layer is kept in sync
+  # with geo.welcome_regions below: every welcomed region maps to at least one
+  # searchable location string here, or it is never fetched. Conceptual buckets
+  # map to concrete queries (Middle East -> United Arab Emirates, EU -> member
+  # states you care about).
+  locations:
+    - United Kingdom          # UK
+    - Ireland                 # Ireland
+    - Netherlands             # EU
+    - Germany                 # EU
+    - Remote
+  count: 10            # target roles to tailor + write per run
+  hard_max: 15         # absolute ceiling per run, enforced in code before the LLM loop
+  seniority:
+    - mid-level
+    - senior
+  max_age_days: 30     # skip postings older than this
+  # JobSpy consumer boards to query. Drop LinkedIn if it rate-limits you.
+  boards:
+    - indeed
+    - linkedin
+    - glassdoor
+    - google
+  # country_indeed drives Indeed/Glassdoor regional endpoints for non-remote searches.
+  country_indeed: United Kingdom
+
+geo:
+  exclude_countries: []                                       # hard drop, never surface — add countries you can't legally work from
+  # Conceptual buckets the viability step labels against. Keep every entry
+  # reachable from search.locations above.
+  welcome_regions: [UK, Ireland, EU]
+  # Signal words that make a remote role eligible from where you live, even if
+  # its region isn't in welcome_regions (e.g. a "worldwide" remote role). Add
+  # words for your own home region here (e.g. your country/continent name).
+  remote_home_signals: [worldwide, global, anywhere]
+  onsite_dead_regions: []                                     # e.g. [US, Canada] if onsite there isn't workable for you
+  # A region in NONE of the lists above and not remote_home_signals-eligible
+  # follows this rule: low = surface ranked last, drop = remove. Never left
+  # unhandled.
+  unlisted_region: low                                        # low | drop
+  # When true, drop any row whose classified sponsorship == "no".
+  hard_sponsorship_filter: false
+  # Location text -> (country, region) hints used to classify a posting's geo.
+  # Add an entry for your own home city/country and for any place you search
+  # that isn't already covered; matched as a substring against the posting's
+  # lowercased location text.
+  country_hints:
+    united kingdom: {country: UK, region: UK}
+    uk: {country: UK, region: UK}
+    england: {country: UK, region: UK}
+    london: {country: UK, region: UK}
+    scotland: {country: UK, region: UK}
+    ireland: {country: Ireland, region: Ireland}
+    dublin: {country: Ireland, region: Ireland}
+    germany: {country: Germany, region: EU}
+    berlin: {country: Germany, region: EU}
+    netherlands: {country: Netherlands, region: EU}
+    amsterdam: {country: Netherlands, region: EU}
+    france: {country: France, region: EU}
+    spain: {country: Spain, region: EU}
+    portugal: {country: Portugal, region: EU}
+    canada: {country: Canada, region: Canada}
+    toronto: {country: Canada, region: Canada}
+    united states: {country: US, region: US}
+    usa: {country: US, region: US}
+    new york: {country: US, region: US}
+    san francisco: {country: US, region: US}
+    remote us: {country: US, region: US}
+    australia: {country: Australia, region: Australia}
+    sydney: {country: Australia, region: Australia}
+    melbourne: {country: Australia, region: Australia}
+    new zealand: {country: New Zealand, region: New Zealand}
+    singapore: {country: Singapore, region: Singapore}
+    united arab emirates: {country: UAE, region: Middle East}
+    uae: {country: UAE, region: Middle East}
+    dubai: {country: UAE, region: Middle East}
+    india: {country: India, region: India}
+    # your_home_city: {country: YourCountry, region: YourRegion}
+
+salary:
+  min_usd: 40000
+  max_usd: 200000
+  # Manual FX refresh. Multiply local amount by factor to get USD.
+  fx:
+    USD: 1.0
+    GBP: 1.27
+    EUR: 1.08
+    AUD: 0.66
+    SGD: 0.74
+    CAD: 0.73
