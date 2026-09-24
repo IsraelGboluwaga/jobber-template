@@ -38,9 +38,10 @@ To stop everything, disable the `daily-job-search` workflow.
 
 ## Quick start
 
-This is a [template repository](../../generate) — click **Use this template**
+This is a [template repository](../../generate) — click "Use this template"
 to get your own copy, and **make it private**: you'll commit your real CV to
-it. (A fork of a public repo can't be made private.) Then:
+it.
+<u>Note:</u> Use the template and don't fork. A fork of a public repo can't be made private. Then:
 
 1. **Install** — `uv sync` ([details](#0-python-uv)).
 2. **Personalize `preferences.yaml`** — your titles, locations, geo rules, and
