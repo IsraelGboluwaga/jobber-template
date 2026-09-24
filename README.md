@@ -1,5 +1,8 @@
 # Jobber — daily job-search pipeline
 
+If this saves you time, consider leaving a star on the repo — it helps other
+job-seekers find it.
+
 A lightweight **scheduled pipeline** (no web app, no server, no UI) that runs once
 each morning on GitHub Actions and:
 
