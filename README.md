@@ -28,8 +28,9 @@ You review in Notion and apply yourself. Three guarantees:
 - **It never invents experience.** The LLM may reorder, reweight, and
   rephrase what's in your master CV, but is instructed never to add
   employers, titles, dates, metrics, or skills you don't have.
-- **Your CV and keys are never committed.** They live in `.env` locally and
-  in GitHub Actions secrets in CI.
+- **Your API keys are never committed.** They live in `.env` locally and in
+  GitHub Actions secrets in CI. (Your CV *is* committed — so keep your copy
+  of the repo private.)
 
 To stop everything, disable the `daily-job-search` workflow.
 
@@ -38,7 +39,8 @@ To stop everything, disable the `daily-job-search` workflow.
 ## Quick start
 
 This is a [template repository](../../generate) — click **Use this template**
-(or fork it) to get your own copy. Then:
+to get your own copy, and **make it private**: you'll commit your real CV to
+it. (A fork of a public repo can't be made private.) Then:
 
 1. **Install** — `uv sync` ([details](#0-python-uv)).
 2. **Personalize `preferences.yaml`** — your titles, locations, geo rules, and
@@ -210,18 +212,14 @@ so the formatting doesn't need to be exact.
    ```
    This writes `data/master_cv.json` and prints it — **read it through** to
    check nothing was lost or garbled.
-5. Upload it as the `MASTER_CV_JSON` secret so GitHub Actions can use it
-   (using the [GitHub CLI](https://cli.github.com/)):
+5. Commit it — the scheduled run on GitHub Actions reads it from the repo:
    ```bash
-   gh secret set MASTER_CV_JSON < data/master_cv.json
+   git add data/master_cv.json && git commit -m "Update master CV"
    ```
-   Or paste the file's contents into a new repo secret named
-   `MASTER_CV_JSON` in the GitHub UI.
 
-`data/master_cv.json` is gitignored — **don't commit it**. It's your real
-resume, and forks of a public repo are public. Repeat steps 4–5 whenever you
-update your resume. If you'd rather write the JSON by hand,
-`data/master_cv.example.json` shows the schema.
+This is your real resume, so **only commit it to a private repo**. Repeat
+steps 4–5 whenever you update your resume. If you'd rather write the JSON by
+hand, `data/master_cv.example.json` shows the schema.
 
 ### 4. ntfy topic
 
@@ -245,8 +243,6 @@ In your repo, go to *Settings → Secrets and variables → Actions*.
 **Secrets** tab:
 
 - `LLM_API_KEY`, `NOTION_TOKEN`, `NOTION_DATABASE_ID` — required.
-- `MASTER_CV_JSON` — required; the contents of `data/master_cv.json`
-  ([step 3](#3-master-cv)).
 - `NTFY_TOPIC` — only if you didn't set your topic in `config.yaml`.
 
 **Variables** tab (optional):
@@ -273,7 +269,6 @@ Actions, see [step 5](#5-github-actions-secrets).
 | `NOTION_DATABASE_ID` | Yes | Secret | The jobs database's id, from its URL. |
 | `NTFY_TOPIC` | No | Secret | Overrides `config.yaml`'s `notify.ntfy_topic`. |
 | `CV_NOTION_PAGE_ID` | Only for `scripts/import_cv.py` | Not needed | Id of the Notion page holding your resume. |
-| `MASTER_CV_JSON` | Yes, in Actions | Secret | Contents of `data/master_cv.json`. Not used locally — the local file is read directly. |
 
 ---
 

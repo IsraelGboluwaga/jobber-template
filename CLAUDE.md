@@ -9,10 +9,13 @@ review. See `README.md` for the full setup flow and architecture.
 
 - **Never auto-applies.** The pipeline only ever writes to Notion; it never
   submits a form or logs into a job board.
-- **Never commit secrets or personal data.** `.env` and `data/master_cv.json`
-  (the user's real resume) are both gitignored — keep it that way. Secrets
+- **Never commit secrets.** `.env` is gitignored — keep it that way. Secrets
   come from environment variables only, loaded via `python-dotenv` locally and
-  injected by GitHub Actions in CI.
+  injected by GitHub Actions in CI. `data/master_cv.json` (the user's real
+  resume) is deliberately *not* gitignored: a fork commits it so the scheduled
+  run can read it (it's too large for an env var/secret). The template repo
+  itself ships only `data/master_cv.example.json` — never commit a real CV
+  here.
 - **The daily run never touches the network for config or CV.** It reads only
   `data/master_cv.json`, `preferences.yaml`, and `config.yaml`. Rebuilding the
   CV from Notion (`scripts/import_cv.py`) is a separate, manual, one-time step.

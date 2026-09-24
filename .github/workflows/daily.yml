@@ -26,20 +26,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen        # uses the committed uv.lock
 
-      # data/master_cv.json is gitignored (it's your real resume), so the run
-      # gets it from a repo Secret instead. If the secret is missing, the
-      # pipeline's own "master_cv.json not found" error fails the run — which
-      # also fires the ntfy failure push.
-      - name: Write master CV from secret
-        env:
-          MASTER_CV_JSON: ${{ secrets.MASTER_CV_JSON }}
-        run: |
-          if [ -n "$MASTER_CV_JSON" ]; then
-            printf '%s' "$MASTER_CV_JSON" > data/master_cv.json
-          else
-            echo "::warning::MASTER_CV_JSON secret is not set; the run will fail without data/master_cv.json."
-          fi
-
       - name: Run pipeline
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
