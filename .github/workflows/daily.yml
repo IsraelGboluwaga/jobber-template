@@ -13,6 +13,9 @@ concurrency:
 
 jobs:
   run:
+    # Skip on the template repo itself (no secrets, no CV) — only your own
+    # copy runs the pipeline.
+    if: github.repository != 'IsraelGboluwaga/jobber-template'
     runs-on: ubuntu-latest
     timeout-minutes: 10          # a hung run dies on its own
     steps:

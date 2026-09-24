@@ -65,6 +65,11 @@ it. (A fork of a public repo can't be made private.) Then:
    push, and either wait for the daily schedule or run the `daily-job-search`
    workflow manually from the Actions tab.
 
+> The daily schedule is live in your copy from the moment you create it, and
+> will fail each morning until setup is finished. To avoid the failure emails,
+> disable `daily-job-search` in the Actions tab until you're done. (It never
+> runs on this template repo itself.)
+
 ---
 
 ## How it works
