@@ -16,8 +16,12 @@ Per call:
     "deepseek"`; other providers just don't get the extra_body.
   * bounded retries: <=3, only on 429/5xx/timeouts, capped exponential backoff.
     Never retry a 4xx. No retry logic nested inside another retrying loop.
-  * static system prompt + master CV go first so providers with prefix/prompt
-    caching (DeepSeek, Anthropic, ...) can reuse that prefix across calls.
+  * static system prompt + master CV go first so providers with automatic
+    prefix/prompt caching on this endpoint shape (e.g. DeepSeek) can reuse
+    that prefix across calls. Note: Anthropic's own SDK supports prompt
+    caching, but its OpenAI-compatible endpoint (used here if you point
+    base_url at it) explicitly does not — see platform.claude.com's
+    OpenAI SDK compatibility docs.
 """
 from __future__ import annotations
 
@@ -82,7 +86,8 @@ def complete(system: str, user: str, max_tokens: int, *, client=None, cfg=None) 
         raise ValueError("config.yaml -> llm.model is not set.")
     extra_body = _thinking_extra_body(cfg)
     # System prompt first => stable prefix for providers with automatic
-    # prompt/prefix caching (e.g. DeepSeek, Anthropic).
+    # prompt/prefix caching on this endpoint shape (e.g. DeepSeek). Not
+    # Anthropic's OpenAI-compatible endpoint — see module docstring.
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
     delay = 1.0

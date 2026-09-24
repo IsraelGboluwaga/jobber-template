@@ -29,8 +29,9 @@ GROUNDING = (
 
 def _cv_block(master_cv: dict) -> str:
     # Put the static master CV first in the user message so providers with
-    # prompt/prefix caching (e.g. DeepSeek, Anthropic) can reuse it across
-    # jobs within a run.
+    # automatic prefix caching (e.g. DeepSeek) can reuse it across jobs within
+    # a run. Doesn't help on Anthropic's OpenAI-compatible endpoint, which
+    # doesn't support prompt caching (the native Anthropic SDK does).
     return "MASTER CV (source of truth, JSON):\n" + json.dumps(master_cv, ensure_ascii=False)
 
 
